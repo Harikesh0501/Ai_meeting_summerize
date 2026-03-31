@@ -7,6 +7,8 @@ USER root
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
+    build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Hugging Face needs a non-root user
