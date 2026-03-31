@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+.env
+ffmpeg.exe
+error_out.txt
+test_error.txt
+frontend_log.txt
+*.wav
+*.mp3
+*.m4a
+*.mp4
+.DS_Store
