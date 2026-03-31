@@ -20,11 +20,10 @@ async def connect_to_mongo():
     try:
         if MONGO_URI:
             import certifi
+            # Removed aggressive 5-second timeouts that cause dropped connections
             client = AsyncIOMotorClient(
                 MONGO_URI,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=5000,
-                socketTimeoutMS=5000,
+                serverSelectionTimeoutMS=30000,
                 tlsCAFile=certifi.where()
             )
             await client.admin.command('ping')
@@ -50,7 +49,14 @@ async def save_meeting(meeting_data: dict):
     meeting_data["created_at"] = datetime.now(timezone.utc).isoformat()
 
     if db is not None:
-        await db.meetings.insert_one(meeting_data)
+        try:
+            await db.meetings.insert_one(meeting_data)
+        except Exception as e:
+            print(f"MongoDB error in save_meeting: {e}")
+            # Fallback to in-memory if MongoDB write fails
+            _id_counter += 1
+            meeting_data["_id"] = str(_id_counter)
+            meetings_store.insert(0, meeting_data)
     else:
         _id_counter += 1
         meeting_data["_id"] = str(_id_counter)
@@ -60,11 +66,15 @@ async def save_meeting(meeting_data: dict):
 async def get_meetings(limit: int = 10):
     """Get meetings from MongoDB or in-memory store."""
     if db is not None:
-        cursor = db.meetings.find().sort("_id", -1).limit(limit)
-        meetings = await cursor.to_list(length=limit)
-        for m in meetings:
-            m["_id"] = str(m["_id"])
-        return meetings
+        try:
+            cursor = db.meetings.find().sort("_id", -1).limit(limit)
+            meetings = await cursor.to_list(length=limit)
+            for m in meetings:
+                m["_id"] = str(m["_id"])
+            return meetings
+        except Exception as e:
+            print(f"MongoDB error in get_meetings: {e}")
+            return meetings_store[:limit]
     else:
         return meetings_store[:limit]
 

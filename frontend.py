@@ -98,6 +98,15 @@ def translate_text(text: str, target_lang: str):
         return text
 
 
+@st.cache_data(show_spinner=False)
+def generate_audio_bytes(clean_text: str, lang_code: str):
+    from gtts import gTTS
+    from io import BytesIO
+    tts = gTTS(text=clean_text, lang=lang_code)
+    fp = BytesIO()
+    tts.write_to_fp(fp)
+    return fp.getvalue()
+
 def format_duration(seconds):
     """Format seconds into human-readable duration."""
     if not seconds:
@@ -120,6 +129,7 @@ if st.button("🔄 Refresh Data manually"):
 
 def display_meeting(idx, m, prefix):
     """Display a single meeting inside an expander with all features."""
+    meeting_id = m.get('_id', str(idx))
     with st.expander(f"📝 {m.get('filename', 'Unknown File')} — {m.get('status', 'Unknown Status').upper()}"):
 
         if m.get('status') == 'completed':
@@ -135,6 +145,7 @@ def display_meeting(idx, m, prefix):
                 try:
                     from datetime import datetime
                     dt = datetime.fromisoformat(created_at)
+                    dt = dt.astimezone()
                     formatted_date = dt.strftime("%d %b %Y, %I:%M %p")
                 except Exception:
                     formatted_date = str(created_at)
@@ -202,9 +213,30 @@ def display_meeting(idx, m, prefix):
             # Transcript with Speaker Labels
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             st.subheader("📝 Full Transcript")
+
+            # Text-To-Speech
+            tts_key = f"tts_audio_{prefix}_{meeting_id}_{target_lang_code}"
+            
+            if st.button("🔊 Listen to Transcript", key=f"tts_btn_{prefix}_{meeting_id}_{target_lang_code}"):
+                st.session_state[f"show_tts_{tts_key}"] = True
+                st.rerun()
+
+            if st.session_state.get(f"show_tts_{tts_key}", False):
+                with st.spinner("Generating audio..."):
+                    try:
+                        import re
+                        clean_text = re.sub(r'\[.*?\]', '', display_transcript).strip()
+                        if clean_text:
+                            audio_bytes = generate_audio_bytes(clean_text, target_lang_code)
+                            st.audio(audio_bytes, format="audio/mp3")
+                        else:
+                            st.warning("Transcript is empty.")
+                    except Exception as e:
+                        st.error(f"Error generating audio: {e}")
+
             st.text_area(
                 "Transcript Text", display_transcript,
-                height=200, key=f"trans_{prefix}_{idx}_{target_lang_code}"
+                height=200, key=f"trans_{prefix}_{meeting_id}_{target_lang_code}"
             )
 
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -214,11 +246,11 @@ def display_meeting(idx, m, prefix):
             st.subheader("🤖 Ask AI about this Meeting")
             question = st.text_input(
                 "Type your question:",
-                key=f"qa_input_{prefix}_{idx}",
+                key=f"qa_input_{prefix}_{meeting_id}",
                 placeholder="e.g., What was discussed about the budget?"
             )
 
-            if st.button("🔍 Ask AI", key=f"qa_btn_{prefix}_{idx}"):
+            if st.button("🔍 Ask AI", key=f"qa_btn_{prefix}_{meeting_id}"):
                 if question:
                     with st.spinner("AI is thinking..."):
                         try:
@@ -229,7 +261,7 @@ def display_meeting(idx, m, prefix):
                             )
                             if qa_response.status_code == 200:
                                 result = qa_response.json()
-                                st.session_state[f"qa_answer_{prefix}_{idx}"] = result
+                                st.session_state[f"qa_answer_{prefix}_{meeting_id}"] = result
                             else:
                                 st.error("Could not get an answer from AI.")
                         except Exception as e:
@@ -238,7 +270,7 @@ def display_meeting(idx, m, prefix):
                     st.warning("Please type a question first.")
 
             # Display stored answer
-            answer_key = f"qa_answer_{prefix}_{idx}"
+            answer_key = f"qa_answer_{prefix}_{meeting_id}"
             if answer_key in st.session_state:
                 result = st.session_state[answer_key]
                 confidence = result.get('confidence', 0)
@@ -251,7 +283,7 @@ def display_meeting(idx, m, prefix):
             st.markdown("---")
             col1, col2, col3 = st.columns(3)
             with col1:
-                if st.button("🗑️ Delete", key=f"del_{prefix}_{idx}"):
+                if st.button("🗑️ Delete", key=f"del_{prefix}_{meeting_id}"):
                     del_res = requests.delete(f"{BACKEND_URL}/meetings/{m.get('_id')}")
                     if del_res.status_code == 200:
                         st.rerun()
@@ -260,19 +292,19 @@ def display_meeting(idx, m, prefix):
                 st.download_button(
                     "📥 Download Summary", display_summary,
                     file_name=f"summary_{m.get('filename')}.txt",
-                    key=f"dl_sum_{prefix}_{idx}"
+                    key=f"dl_sum_{prefix}_{meeting_id}"
                 )
             with col3:
                 st.download_button(
                     "📥 Download Transcript", display_transcript,
                     file_name=f"transcript_{m.get('filename')}.txt",
-                    key=f"dl_trans_{prefix}_{idx}"
+                    key=f"dl_trans_{prefix}_{meeting_id}"
                 )
 
         elif m.get('status') == 'failed':
             col1, col2 = st.columns([1, 4])
             with col1:
-                if st.button("🗑️ Delete Failed", key=f"delf_{prefix}_{idx}"):
+                if st.button("🗑️ Delete Failed", key=f"delf_{prefix}_{meeting_id}"):
                     requests.delete(f"{BACKEND_URL}/meetings/{m.get('_id')}")
                     st.rerun()
             with col2:
