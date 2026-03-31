@@ -25,6 +25,13 @@ COPY --chown=user . $HOME/app
 # Install Python requirements
 # Install CPU-only torch to save massive amounts of space and prevent freezing
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Split heavy installations to prevent Out-Of-Memory errors during pip resolution
+RUN pip install --no-cache-dir wheel setuptools
+RUN pip install --no-cache-dir fastapi uvicorn python-multipart motor pydantic python-dotenv
+RUN pip install --no-cache-dir transformers==4.38.2
+RUN pip install --no-cache-dir openai-whisper deep-translator
+RUN pip install --no-cache-dir yake
+RUN pip install --no-cache-dir resemblyzer spectralcluster
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose port 7860 for HuggingFace
