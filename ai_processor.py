@@ -21,8 +21,8 @@ speaker_encoder = None
 def load_models():
     global whisper_model, summarizer, sentiment_analyzer
     if whisper_model is None:
-        print("Loading Whisper Model (base)...")
-        whisper_model = whisper.load_model("base")
+        print("Loading Whisper Model (tiny)...")
+        whisper_model = whisper.load_model("tiny")
     if summarizer is None:
         print("Loading Summarization Model (BART)...")
         summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -203,7 +203,11 @@ def run_ml_pipeline(file_path: str):
 
     # ── Step 1: Transcription ──
     print(f"Transcribing audio: {file_path}")
-    transcript_result = whisper_model.transcribe(file_path, task="translate")
+    transcript_result = whisper_model.transcribe(
+        file_path,
+        fp16=False,
+        condition_on_previous_text=False
+    )
 
     # ── Step 2: Speaker Diarization ──
     print("Running speaker diarization...")
