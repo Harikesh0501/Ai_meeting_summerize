@@ -2,6 +2,28 @@ import streamlit as st
 import requests
 from streamlit_autorefresh import st_autorefresh
 from deep_translator import GoogleTranslator
+import socket
+import subprocess
+import sys
+import time
+import os
+
+@st.cache_resource
+def start_backend():
+    """Auto-start FastAPI backend if it's not already running."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # Check if port 8000 is already in use
+        if s.connect_ex(('localhost', 8000)) != 0:
+            print("🚀 FastAPI backend not detected. Auto-starting on port 8000...")
+            # Use sys.executable to ensure we use the same Python environment
+            subprocess.Popen(
+                [sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
+                # Run independently
+                start_new_session=True if os.name == 'posix' else False
+            )
+            time.sleep(3) # Wait for backend to initialize
+
+start_backend()
 
 st.set_page_config(page_title="AI Meeting Summarizer", page_icon="🎙️", layout="wide")
 
