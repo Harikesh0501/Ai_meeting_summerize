@@ -1,3 +1,13 @@
+---
+title: AI Meeting Summarizer
+emoji: 🎙️
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🎙️ AI Meeting Summarizer
 
 An AI-powered meeting analysis tool that automatically generates **transcripts**, **summaries**, **action items**, and more from audio files or video URLs (YouTube, Instagram, etc.).
