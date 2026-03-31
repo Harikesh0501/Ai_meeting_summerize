@@ -34,8 +34,11 @@ RUN pip install --no-cache-dir yake
 RUN pip install --no-cache-dir resemblyzer spectralcluster
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port 7860 for HuggingFace
+# Make start script executable
+RUN chmod +x start.sh
+
+# Expose port 7860 for HuggingFace (Streamlit)
 EXPOSE 7860
 
-# Command to run the FastAPI application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Command to run both the FastAPI application and Streamlit
+CMD ["./start.sh"]
