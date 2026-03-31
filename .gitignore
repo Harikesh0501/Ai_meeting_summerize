@@ -10,3 +10,8 @@ frontend_log.txt
 *.m4a
 *.mp4
 .DS_Store
+db_test.txt
+mongo_err.txt
+mongo_err2.txt
+test_mongo.py
+temp_*

@@ -9,7 +9,7 @@ st.title("🎙️ AI Meeting Summarizer")
 st.markdown("Upload your meeting audio to automatically generate a **transcript**, **summary**, and extract **action items**.")
 
 # Config
-BACKEND_URL = "https://harikesh05-ai-meeting-api.hf.space"
+BACKEND_URL = "http://localhost:8000"  # temporarily using local backend for fast testing
 st_autorefresh(interval=10000, limit=200, key="data_refresh")
 
 # ─────────────────────────────────────────────
@@ -32,6 +32,38 @@ if uploaded_file is not None:
                     st.sidebar.error("Server Error!")
             except Exception as e:
                 st.sidebar.error(f"Connection Failed: {e}")
+
+# ─────────────────────────────────────────────
+# Sidebar: Process from URL (YouTube, etc.)
+# ─────────────────────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.header("🔗 Process from URL")
+url_input = st.sidebar.text_input(
+    "Paste a YouTube or video URL:",
+    placeholder="https://www.youtube.com/watch?v=...",
+    key="url_input"
+)
+
+if st.sidebar.button("🚀 Process URL", key="process_url_btn"):
+    if url_input and url_input.strip():
+        with st.spinner("Sending URL for processing..."):
+            try:
+                response = requests.post(
+                    f"{BACKEND_URL}/process-url/",
+                    json={"url": url_input.strip()},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    st.sidebar.success("✅ URL received! AI is downloading & processing in the background.")
+                    st.sidebar.info("⏳ This may take a few minutes depending on video length. Dashboard will auto-refresh.")
+                else:
+                    st.sidebar.error(f"Server Error: {response.text}")
+            except Exception as e:
+                st.sidebar.error(f"Connection Failed: {e}")
+    else:
+        st.sidebar.warning("⚠️ Please paste a valid URL first.")
+
+st.sidebar.caption("Supports: YouTube, Instagram, Twitter, Facebook, and 1000+ sites")
 
 # ─────────────────────────────────────────────
 # Sidebar: Language Translator
@@ -145,15 +177,10 @@ def display_meeting(idx, m, prefix):
             raw_transcript = m.get('transcript', 'No transcript found.')
             raw_action_items = m.get('action_items', [])
 
-            with st.spinner("Translating..." if target_lang_code != "en" else ""):
-                if target_lang_code != "en":
-                    display_summary = translate_text(raw_summary, target_lang_code)
-                    display_transcript = translate_text(raw_transcript, target_lang_code)
-                    display_action_items = [translate_text(item, target_lang_code) for item in raw_action_items]
-                else:
-                    display_summary = raw_summary
-                    display_transcript = raw_transcript
-                    display_action_items = raw_action_items
+            with st.spinner("Translating content..." if target_lang_code != "en" else "Loading native content..."):
+                display_summary = translate_text(raw_summary, target_lang_code)
+                display_transcript = translate_text(raw_transcript, target_lang_code)
+                display_action_items = [translate_text(item, target_lang_code) for item in raw_action_items]
 
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             # AI Summary
@@ -177,7 +204,7 @@ def display_meeting(idx, m, prefix):
             st.subheader("📝 Full Transcript")
             st.text_area(
                 "Transcript Text", display_transcript,
-                height=200, key=f"trans_{prefix}_{idx}"
+                height=200, key=f"trans_{prefix}_{idx}_{target_lang_code}"
             )
 
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -266,7 +293,7 @@ try:
         tab1, tab2 = st.tabs(["🎙️ Recent Uploads", "📜 Full History"])
 
         with tab1:
-            recent_meetings = meetings[:3]
+            recent_meetings = meetings[:1]
             if not recent_meetings:
                 st.info("No meetings found. Upload an audio file to get started!")
 

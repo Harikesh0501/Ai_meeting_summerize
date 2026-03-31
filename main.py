@@ -9,11 +9,15 @@ from database import (
     delete_meeting as remove_meeting,
     get_meeting_by_id
 )
-from ai_processor import process_audio_task, answer_question
+from ai_processor import process_audio_task, answer_question, process_url_task
 
 
 class QuestionRequest(BaseModel):
     question: str
+
+
+class URLRequest(BaseModel):
+    url: str
 
 
 @asynccontextmanager
@@ -52,6 +56,16 @@ async def upload_audio(background_tasks: BackgroundTasks, file: UploadFile = Fil
     return {"message": "File uploaded successfully, processing started in the background."}
 
 
+@app.post("/process-url/")
+async def process_url_endpoint(background_tasks: BackgroundTasks, request: URLRequest):
+    """Download audio from a URL (YouTube, etc.) and process it."""
+    url = request.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL cannot be empty.")
+
+    background_tasks.add_task(process_url_task, url)
+    return {"message": "URL received! Downloading and processing in the background."}
+
 @app.get("/meetings/")
 async def get_meetings_endpoint(limit: int = 100):
     meetings = await fetch_meetings(limit=limit)
@@ -79,9 +93,26 @@ async def ask_question_endpoint(meeting_id: str, request: QuestionRequest):
     if not transcript:
         raise HTTPException(status_code=400, detail="No transcript available.")
 
-    result = await answer_question(transcript, request.question)
-    return result
+    from deep_translator import GoogleTranslator
+    try:
+        # Translate question to English for QA model
+        to_en_translator = GoogleTranslator(source='auto', target='en')
+        english_question = to_en_translator.translate(request.question)
+    except Exception:
+        english_question = request.question
 
+    result = await answer_question(transcript, english_question)
+
+    try:
+        # Detect the question language and translate the answer back
+        detected_lang = GoogleTranslator().detect(request.question)
+        if detected_lang and detected_lang != 'en':
+            to_native_translator = GoogleTranslator(source='en', target=detected_lang)
+            result["answer"] = to_native_translator.translate(result["answer"])
+    except Exception:
+        pass
+
+    return result
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

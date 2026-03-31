@@ -2,6 +2,7 @@ import whisper
 from transformers import pipeline
 import os
 import asyncio
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from database import save_meeting
 import yake
@@ -21,8 +22,8 @@ speaker_encoder = None
 def load_models():
     global whisper_model, summarizer, sentiment_analyzer
     if whisper_model is None:
-        print("Loading Whisper Model (tiny)...")
-        whisper_model = whisper.load_model("tiny")
+        print("Loading Whisper Model (small)...")
+        whisper_model = whisper.load_model("small")
     if summarizer is None:
         print("Loading Summarization Model (BART)...")
         summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -205,8 +206,10 @@ def run_ml_pipeline(file_path: str):
     print(f"Transcribing audio: {file_path}")
     transcript_result = whisper_model.transcribe(
         file_path,
+        task="translate",
+        language=None,
         fp16=False,
-        condition_on_previous_text=False
+        condition_on_previous_text=True
     )
 
     # ── Step 2: Speaker Diarization ──
@@ -240,16 +243,18 @@ def run_ml_pipeline(file_path: str):
     max_length = min(150, max(30, word_count // 2))
 
     summary = ""
-    if word_count > 20:
+    if word_count > 10:
         summary_result = summarizer(
             truncated_transcript,
             max_length=max_length,
-            min_length=int(max_length * 0.3),
+            min_length=min(int(max_length * 0.3), word_count),
             do_sample=False
         )
         summary = summary_result[0]['summary_text']
+    elif word_count > 0:
+        summary = truncated_transcript.strip()
     else:
-        summary = "Audio too short to generate a meaningful summary."
+        summary = "No speech detected in the audio."
 
     # ── Step 6: Sentiment Analysis ──
     print("Analyzing sentiment...")
@@ -298,3 +303,87 @@ async def process_audio_task(file_path: str, filename: str):
         if os.path.exists(file_path):
             os.remove(file_path)
             print("Removed temporary audio file.")
+
+
+# ─────────────────────────────────────────────
+# Feature: Download Audio from URL (YouTube etc.)
+# ─────────────────────────────────────────────
+def download_audio_from_url(url: str) -> tuple:
+    """Download audio from a YouTube/video URL using yt-dlp. Returns (file_path, title)."""
+    import yt_dlp
+
+    unique_id = uuid.uuid4().hex[:8]
+    output_path = f"temp_url_{unique_id}"
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': output_path + '.%(ext)s',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'wav',
+            'preferredquality': '192',
+        }],
+        'ffmpeg_location': os.path.dirname(os.path.abspath(__file__)),
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        title = info.get('title', url)
+
+    # yt-dlp saves as .wav after postprocessing
+    wav_path = output_path + ".wav"
+    if not os.path.exists(wav_path):
+        # Fallback: find any file with the output prefix
+        for f in os.listdir('.'):
+            if f.startswith(f"temp_url_{unique_id}"):
+                wav_path = f
+                break
+
+    return wav_path, title
+
+
+async def process_url_task(url: str):
+    """Download audio from URL, then run full ML pipeline."""
+    loop = asyncio.get_running_loop()
+    try:
+        print(f"Downloading audio from URL: {url}")
+        file_path, title = await loop.run_in_executor(executor, download_audio_from_url, url)
+        print(f"Downloaded: {title} -> {file_path}")
+
+        # Run the ML pipeline
+        transcript, summary, action_items, sentiment, keywords, duration_seconds = \
+            await loop.run_in_executor(executor, run_ml_pipeline, file_path)
+
+        print("ML Pipeline completed for URL. Saving results...")
+        await save_meeting({
+            "filename": f"🔗 {title}",
+            "source_url": url,
+            "transcript": transcript,
+            "summary": summary,
+            "action_items": action_items,
+            "sentiment": sentiment,
+            "keywords": keywords,
+            "duration_seconds": duration_seconds,
+            "status": "completed"
+        })
+        print("Successfully saved URL results.")
+
+    except Exception as e:
+        print(f"Error processing URL: {e}")
+        await save_meeting({
+            "filename": f"🔗 {url[:50]}...",
+            "source_url": url,
+            "status": "failed",
+            "error": str(e)
+        })
+    finally:
+        # Cleanup any temp files
+        for f in os.listdir('.'):
+            if f.startswith("temp_url_"):
+                try:
+                    os.remove(f)
+                    print(f"Removed temp file: {f}")
+                except Exception:
+                    pass

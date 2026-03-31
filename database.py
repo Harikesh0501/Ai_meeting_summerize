@@ -19,11 +19,13 @@ async def connect_to_mongo():
     global client, db, use_memory_store
     try:
         if MONGO_URI:
+            import certifi
             client = AsyncIOMotorClient(
                 MONGO_URI,
                 serverSelectionTimeoutMS=5000,
                 connectTimeoutMS=5000,
                 socketTimeoutMS=5000,
+                tlsCAFile=certifi.where()
             )
             await client.admin.command('ping')
             db = client.ai_meeting_summarizer
