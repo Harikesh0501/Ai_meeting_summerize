@@ -6,7 +6,6 @@ streamlit-autorefresh
 deep-translator
 openai-whisper
 transformers==4.38.2
-torch
 pydantic
 pydub
 python-dotenv

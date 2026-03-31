@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+.env
+*.exe
+*.log
+*.wav
+*.mp3
+.git/

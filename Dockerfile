@@ -21,6 +21,8 @@ WORKDIR $HOME/app
 COPY --chown=user . $HOME/app
 
 # Install Python requirements
+# Install CPU-only torch to save massive amounts of space and prevent freezing
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose port 7860 for HuggingFace
