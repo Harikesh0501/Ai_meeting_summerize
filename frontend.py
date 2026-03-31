@@ -9,7 +9,7 @@ st.title("🎙️ AI Meeting Summarizer")
 st.markdown("Upload your meeting audio to automatically generate a **transcript**, **summary**, and extract **action items**.")
 
 # Config
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "https://harikesh05-ai-meeting-api.hf.space"
 st_autorefresh(interval=10000, limit=200, key="data_refresh")
 
 # ─────────────────────────────────────────────
